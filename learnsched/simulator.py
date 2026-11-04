@@ -84,6 +84,7 @@ class Simulator:
         self.done_count = 0
         self.config_history: list = []
         self.wait_ticks_window = 0.0
+        self.response_wait_window = 0.0
         self.completed_window = 0
         self.cs_window = 0
         self.busy_ticks = 0.0
@@ -182,6 +183,8 @@ class Simulator:
                      else [p for q in self.queues for p in q])
         for p in ready_now:
             p.waiting += 1.0
+            if p.first_start is None:
+                self.response_wait_window += 1.0
         self.wait_ticks_window += len(ready_now)
 
     def _tick(self) -> None:
@@ -279,6 +282,7 @@ class Simulator:
 
     def reset_window_stats(self) -> None:
         self.wait_ticks_window = 0.0
+        self.response_wait_window = 0.0
         self.completed_window = 0
         self.cs_window = 0
         self.busy_ticks = 0.0

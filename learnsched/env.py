@@ -30,10 +30,15 @@ ACTION_CONFIGS: list[MLFQConfig] = [
     MLFQConfig((8, 16, 32, float("inf")), 50),
     MLFQConfig((1, 2, 4, float("inf")), 25),
     MLFQConfig((8, 16, 32, float("inf")), 0),  # long quanta, no boost
+    MLFQConfig((1, 2, 4, float("inf")), 0),    # short quanta, no boost (tuned winner family)
+    MLFQConfig((2, 4, 8, float("inf")), 0),    # medium quanta, no boost
 ]
 
-# Reward weights (normalised terms; see docs/MDP.md)
-W_COMPLETE, W_WAIT, W_CS, W_FAIR = 1.0, 0.02, 0.05, 0.10
+# Reward v3: built directly from accrued waiting time, so the episodic
+# return tracks the reported latency metrics (v1/v2 ranked long quanta
+# best even on latency -- verified by scoring every fixed action).
+#   sum over windows of wait_ticks/n == average waiting time.
+W_WAIT, W_RESP, W_CS, W_COMPLETE = 0.10, 0.25, 0.01, 0.10
 
 
 class MLFQTuningEnv(gym.Env):
@@ -109,21 +114,18 @@ class MLFQTuningEnv(gym.Env):
         assert self.sim is not None, "call reset() first"
         self.current_action = int(action)
         self.sim.set_mlfq_config(ACTION_CONFIGS[self.current_action])
+        done_before = {p.pid for p in self.sim.procs if p.completion is not None}
         self.sim.reset_window_stats()
         self.sim.step_ticks(self.decision_interval)
         self.decision_time_s += time.perf_counter() - t0 + self.controller_overhead_s
 
         s = self.sim
         wait_cost = s.wait_ticks_window / max(self.decision_interval, 1)  # avg ready length
-        fairness_pen = 0.0
-        if s.completed_window:
-            done_waits = [p.waiting for p in s.procs if p.completion is not None]
-            if len(done_waits) > 1:
-                fairness_pen = float(np.std(done_waits) / (np.mean(done_waits) + 1e-9))
-        reward = (W_COMPLETE * s.completed_window
-                  - W_WAIT * wait_cost
+        n = max(len(s.procs), 1)
+        reward = (-W_WAIT * (s.wait_ticks_window / n)
+                  - W_RESP * (s.response_wait_window / n)
                   - W_CS * s.cs_window
-                  - W_FAIR * min(fairness_pen, 2.0))
+                  + W_COMPLETE * s.completed_window)
         terminated = s.done
         truncated = (not terminated) and s.time >= self.max_ticks
         # NOTE: no wall-clock values in info (keeps step() deterministic

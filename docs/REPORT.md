@@ -57,28 +57,35 @@ turnaround, throughput, Jain fairness, context switches, overheads.
 
 ## 11. Results (measured; results/experiments.csv, mean over scenarios×seeds)
 
+Reward design was iterated after a diagnostic (see "Reward iteration"
+below). Final model: reward v3, 10-configuration action space, 120k steps.
+
 | Scheduler | Avg response | Avg waiting | Fairness | Context switches |
 |---|---|---|---|---|
 | SJF | 147.5 | 166.2 | 0.54 | 97 |
 | MLFQ tuned (validation) | 4.0 | 286.3 | 0.59 | 186 |
+| PPO trained (final) | 4.2 | 286.5 | 0.51 | 180 |
+| PPO untrained | 8.5 | 306.6 | 0.73 | 189 |
 | Rule-based adaptive | 11.2 | 343.5 | 0.69 | 598 |
-| PPO untrained | 22.8 | 350.3 | 0.69 | 366 |
-| PPO trained (50k) | 74.8 | 370.0 | 0.62 | 153 |
 | MLFQ fixed | 40.1 | 356.7 | 0.68 | 217 |
 | RR | 52.3 | 360.5 | 0.65 | 222 |
 | FCFS | 196.4 | 297.6 | 0.37 | 97 |
 
-Training reward improved (mean episodic reward, first 100 episodes
-≈ 11.1 → last 100 ≈ 18.3; results/training_rewards.csv), so the agent did
-learn the reward. It nevertheless generalised poorly as a scheduler.
+Per-scenario, trained PPO matches tuned MLFQ waiting within ±5 ticks in
+all six scenarios (slightly better on bursty and io_intensive, slightly
+worse on changing/mixed), with comparable response and p95 response
+(14.3 vs 14.5) and fewer context switches (180 vs 186). Its fairness is
+worse (0.51 vs 0.59), driven by bursty workloads (0.55 vs 0.91). SJF still
+has the lowest waiting but catastrophic response/p95 (starvation).
 
-**What the agent learned:** policy inspection shows the trained controller
-selects the long-quantum configuration (q=8/16/32, boost 50) in almost
-every window on cpu_bound, changing and unseen_mixed traces. Long quanta
-minimise context switches and maximise per-window completions of CPU-bound
-work — exactly what the reward pays for — at the cost of interactive
-response. In other words, the agent optimised the stated reward, and the
-reward under-weights response latency on I/O-heavy phases.
+**Reward iteration (the methodological finding):** v1/v2 rewards ranked
+long quanta best *even on latency* when every fixed action was scored
+directly — the agent was correctly optimising a misaligned reward and
+collapsed to q=8/16/32. The final reward is built from accrued waiting
+time itself (episodic return ≈ −(0.10·avg waiting + 0.25·avg response)),
+verified to rank fixed configurations consistently with the reported
+metrics before retraining. The tuned winner's configuration family
+(short quanta, boost off) also had to be present in the action space.
 
 ## 12. Performance trade-offs
 Short quanta: better response, more switches/overhead. Long quanta: the
@@ -93,10 +100,14 @@ speed makes millions of steps impractical; decision overhead measured as
 wall-clock on the development laptop only.
 
 ## 14. Conclusions
-PPO can learn a reward-consistent MLFQ tuning policy in this simulator,
-but with the current reward and training budget it does not beat a
-validation-tuned fixed MLFQ or SJF. Learning happened; scheduling
-superiority did not. Both halves of that sentence are the finding.
+With a reward aligned to the latency metrics and the tuned configuration
+family inside its action space, PPO learns a policy that matches the
+validation-tuned fixed MLFQ on waiting/response in every scenario —
+without per-scenario hand tuning — at a fairness cost. It does not beat
+SJF on waiting (SJF uses oracle burst knowledge) and does not dominate
+the tuned MLFQ. The strongest finding is methodological: reward
+alignment, checked by scoring fixed actions before training, determined
+success or failure more than training length did.
 
 ## 15. Future work
 Reward rebalance (normalised response-time term, per-phase credit),

@@ -53,21 +53,38 @@ elif algo == "mlfq":
 else:
     result = Simulator(procs, algorithm=algo, rr_quantum=4, cs_overhead=cs_overhead).run()
 
-rows = [{"Process": f"P{s.pid}" if s.pid and s.pid > 0 else ("CS overhead" if s.pid == -1 else "Idle"),
-         "Start": s.start, "Finish": s.end} for s in result.timeline]
-fig = px.timeline(pd.DataFrame(rows), x_start="Start", x_end="Finish", y="Process",
-                  color="Process", title=f"Gantt chart - {algo} on {scenario} (seed {seed})")
-fig.update_yaxes(autorange="reversed")
-st.plotly_chart(fig, use_container_width=True)
+def gantt_fig(segments, title):
+    """Numeric-tick Gantt chart (px.timeline would coerce ticks to dates)."""
+    labels = {}
+    for s in segments:
+        name = f"P{s.pid}" if s.pid and s.pid > 0 else ("CS overhead" if s.pid == -1 else "Idle")
+        labels.setdefault(name, []).append(s)
+    fig = go.Figure()
+    for name, segs in labels.items():
+        fig.add_trace(go.Bar(
+            name=name, orientation="h",
+            y=[name] * len(segs),
+            x=[s.end - s.start for s in segs],
+            base=[s.start for s in segs],
+            marker_color="#b0b0b0" if name in ("Idle", "CS overhead") else None,
+            hovertemplate=f"{name}: [%{{base}}, %{{x}} ticks]<extra></extra>"))
+    fig.update_layout(title=title, barmode="overlay",
+                      xaxis_title="Time (ticks)", yaxis_title="Process",
+                      height=max(300, 28 * len(labels)))
+    fig.update_yaxes(autorange="reversed")
+    return fig
+
+
+st.plotly_chart(gantt_fig(result.timeline,
+                          f"Gantt chart - {algo} on {scenario} (seed {seed})"),
+                use_container_width=True)
 
 step = st.slider("Playback: show schedule up to time", 0.0, float(result.makespan),
                  float(result.makespan))
-visible = [r for r in rows if r["Start"] < step]
+visible = [s for s in result.timeline if s.start < step]
 if visible:
-    fig2 = px.timeline(pd.DataFrame(visible), x_start="Start", x_end="Finish",
-                       y="Process", color="Process", title=f"Playback t <= {step:.0f}")
-    fig2.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(gantt_fig(visible, f"Playback t <= {step:.0f}"),
+                    use_container_width=True)
 
 m = result.metrics()
 cols = st.columns(4)
