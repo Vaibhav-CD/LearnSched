@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Pip and build artifacts
+pip-build-tracker-*
+pip-ephem-wheel-cache-*
+pip-install-*
+pip-metadata-*
+pip-unpack-*
+tmp*
+*.egg-info/
+dist/
+build/
+
+# Testing and profiling
+.pytest_cache/
+pytest-of-*/
+torchinductor_*/
+.coverage
+htmlcov/
+
+# Logs and transient files
+*.log
+results/dashboard_err.txt
+results/dashboard_log.txt
+SB3-*/
+
+# System and editor files
+.agents/
+.eden/
+.hg/
+.muse/
+.sl/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
