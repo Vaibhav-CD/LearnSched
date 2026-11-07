@@ -127,7 +127,11 @@ if exp is not None:
     for title, col in [("Latency comparison (avg response)", "avg_response"),
                        ("Throughput comparison", "throughput"),
                        ("Fairness comparison (Jain index)", "fairness_jain"),
+                       ("Best score (composite: waiting + 0.5*response - 100*fairness, lower is better)",
+                        "composite_score"),
                        ("Context-switch comparison", "context_switches")]:
+        if col not in exp.columns:
+            continue
         st.subheader(title)
         agg = exp.groupby("scheduler")[col].mean().reset_index()
         st.plotly_chart(px.bar(agg, x="scheduler", y=col, title=title), use_container_width=True)

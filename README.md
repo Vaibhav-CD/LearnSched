@@ -21,7 +21,7 @@ python -m venv --system-site-packages .venv   # reuses a system torch/SB3 if pre
 ## Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/ -q          # 23 unit tests
+.\.venv\Scripts\python.exe -m pytest tests/ -q          # 29 unit tests
 .\.venv\Scripts\python.exe scripts/check_env.py          # Gymnasium env validation
 .\.venv\Scripts\python.exe scripts/train_ppo.py --smoke  # 4k steps, ~10 s
 .\.venv\Scripts\python.exe scripts/train_ppo.py --timesteps 50000
@@ -40,13 +40,17 @@ python -m venv --system-site-packages .venv   # reuses a system torch/SB3 if pre
 - [dashboard/app.py](/dashboard/app.py) — Streamlit research dashboard
 - [docs/DESIGN.md](/docs/DESIGN.md), [docs/MDP.md](/docs/MDP.md), [docs/PPO.md](/docs/PPO.md), [docs/REPORT.md](/docs/REPORT.md)
 
-## Measured findings (50k-step model, seeds 0–2, 6 scenarios)
+## Measured findings (fairness-aware model, seeds 0–2, 6 scenarios)
 
-See [docs/REPORT.md](/docs/REPORT.md) for the full table. In short: PPO's
-episodic reward improved during training, but the trained controller did
-**not** beat the validation-tuned fixed MLFQ or SJF on average waiting
-time. The learned policy collapsed toward long quanta (low context-switch
-overhead, poor interactive response). This is reported, not hidden.
+See [docs/REPORT.md](/docs/REPORT.md) for the full table. Fairness (Jain
+index over cpu/turnaround) is part of the objective: one composite score
+(`avg_waiting + 0.5*avg_response - 100*fairness_jain`) drives the PPO
+reward, validation tuning, and the final ranking. The fairness-aware PPO
+(120k steps, validation-selected seed) is the best deployable scheduler:
+waiting 285.0 (vs 286.3 tuned MLFQ), fairness 0.62 (vs 0.51 for the
+latency-only PPO at the same waiting). SJF scores lower only as an
+oracle bound using true burst lengths. Earlier negative results are
+preserved in `results/experiments_v3_latency_only.csv`.
 
 ## Limitations
 

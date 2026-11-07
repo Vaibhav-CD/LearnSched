@@ -19,7 +19,7 @@ $$\mathcal M = (S, A, P, R, \gamma)$$
 
 ## Action $A$
 
-`Discrete(8)`: an index into 8 valid MLFQ configurations
+`Discrete(10)`: an index into 10 valid MLFQ configurations
 (`learnsched.env.ACTION_CONFIGS`) spanning short/long quanta
 (1–32 ticks across queue levels) and boost intervals (25/50/100/off).
 The agent tunes *parameters*; per-tick dispatch stays inside MLFQ.
@@ -30,19 +30,30 @@ The simulator advances `decision_interval` ticks under the chosen
 configuration. Arrivals and I/O completions during the window are
 stochastic from the agent's viewpoint (workload-generated).
 
-## Reward $R$
+## Reward $R$ (v4, fairness-aware)
 
-Per decision window:
+Per decision window (`learnsched.env`):
 
-$$r = 1.0 \cdot (\text{completions}) - 0.02 \cdot (\text{mean ready length})
-      - 0.05 \cdot (\text{context switches}) - 0.10 \cdot (\text{waiting spread})$$
+$$r = -0.10 \cdot \frac{\text{wait ticks}}{n}
+     - 0.25 \cdot \frac{\text{response-wait ticks}}{n}
+     - 0.01 \cdot (\text{context switches})
+     + 0.10 \cdot (\text{completions})
+     - 0.20 \cdot (1 - J_{\text{window}})$$
 
-- Completions reward throughput; ready-length penalises latency build-up.
-- Context switches penalise configurations that thrash (tiny quanta).
-- Waiting spread (std/mean of completed waiting times, clipped) penalises
-  unfair configurations.
+- The waiting terms are accrued waiting time itself, so the episodic return
+  tracks the reported latency metrics (sum of wait ticks / $n$ = avg waiting).
+- $J_{\text{window}}$ is Jain's fairness index over
+  `cpu_received / elapsed_since_arrival` for arrived processes
+  (`metrics.current_jain`) — the same cpu/turnaround definition as the
+  episodic `fairness_jain`, from observable state only. It is a bounded
+  penalty, never a bonus, so prolonging an episode cannot farm fairness.
+- `W_FAIR = 0.20` is calibrated to the ranking score
+  (`metrics.composite_score`: waiting + 0.5·response − 100·Jain): episodic
+  fairness pressure ≈ 0.20 × ~45 windows against 0.10 per waiting tick,
+  a ratio of ~90 ≈ 100. At 0.50 (ratio ~225) the policy bought +0.10 Jain
+  for +51 ticks of waiting and scored worse overall.
 - There is **no** bonus for the episode ending and no way to gain reward by
-  dropping work: unfinished processes keep accruing ready-length penalty,
+  dropping work: unfinished processes keep accruing waiting penalty,
   so starvation is punished, not rewarded.
 
 ## Discount $\gamma$

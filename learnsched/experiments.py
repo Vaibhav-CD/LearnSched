@@ -24,7 +24,9 @@ from .train import ppo_schedule
 SCHEDULERS = ("fcfs", "sjf", "rr", "mlfq_fixed", "mlfq_tuned",
               "rule_adaptive", "ppo_untrained", "ppo_trained")
 METRIC_COLS = ["avg_response", "p95_response", "avg_waiting", "avg_turnaround",
-               "throughput", "fairness_jain", "context_switches",
+               "throughput", "fairness_jain", "composite_score",
+               "avg_slowdown", "p95_slowdown", "max_slowdown",
+               "context_switches",
                "overhead_time", "decision_overhead_s", "makespan"]
 
 
@@ -36,8 +38,26 @@ def candidate_configs():
 
 
 def _score(metrics_list):
-    """Validation objective: waiting + response (lower is better)."""
-    return float(np.mean([m["avg_waiting"] + 0.5 * m["avg_response"] for m in metrics_list]))
+    """Validation objective: composite latency+fairness (lower is better).
+
+    Same composite_score used for the final scheduler ranking, so the tuned
+    MLFQ is selected for exactly the quantity it is later judged on.
+    """
+    from .metrics import composite_score
+    return float(np.mean([composite_score(m) for m in metrics_list]))
+
+
+def rank_schedulers(df):
+    """Mean composite ranking (lower is better). SJF is an oracle bound.
+
+    Returns the groupby-mean table sorted by composite_score, with an
+    ``oracle`` flag: SJF uses true burst lengths a real scheduler cannot
+    know, so the best *deployable* scheduler is the first non-oracle row.
+    """
+    cols = [c for c in METRIC_COLS if c in df.columns]
+    table = df.groupby("scheduler")[cols].mean().sort_values("composite_score")
+    table["oracle"] = table.index == "sjf"
+    return table
 
 
 def tune_fixed_mlfq(scenarios=("cpu_bound", "io_intensive", "mixed"),
@@ -50,7 +70,10 @@ def tune_fixed_mlfq(scenarios=("cpu_bound", "io_intensive", "mixed"),
             procs = workloads.generate(sc, n=n, seed=sd)
             ms.append(Simulator(procs, algorithm="mlfq", mlfq=cfg).run().metrics())
         s = _score(ms)
-        rows.append({"config": cfg.label(), "val_score": s})
+        rows.append({"config": cfg.label(), "val_score": s,
+                     "val_avg_waiting": float(np.mean([m["avg_waiting"] for m in ms])),
+                     "val_avg_response": float(np.mean([m["avg_response"] for m in ms])),
+                     "val_fairness_jain": float(np.mean([m["fairness_jain"] for m in ms]))})
         if best is None or s < best[1]:
             best = (cfg, s)
     return best[0], pd.DataFrame(rows).sort_values("val_score")

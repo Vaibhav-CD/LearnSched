@@ -8,7 +8,7 @@ import pandas as pd
 
 os.makedirs("results/plots", exist_ok=True)
 exp = pd.read_csv("results/experiments.csv")
-for col in ["avg_waiting", "avg_response", "fairness_jain", "context_switches"]:
+for col in ["avg_waiting", "avg_response", "fairness_jain", "composite_score", "context_switches"]:
     agg = exp.groupby("scheduler")[col].mean()
     ax = agg.plot(kind="bar", figsize=(9, 4), title=f"Mean {col} by scheduler (all scenarios/seeds)")
     ax.set_ylabel(col)

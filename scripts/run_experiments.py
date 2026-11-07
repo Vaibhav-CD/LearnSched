@@ -5,7 +5,7 @@ Usage: python scripts/run_experiments.py [--quick] [--model models/ppo_mlfq.zip]
 import argparse, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pandas as pd
-from learnsched.experiments import tune_fixed_mlfq, run_experiments, ablation, summarize
+from learnsched.experiments import tune_fixed_mlfq, run_experiments, ablation, summarize, rank_schedulers
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -31,5 +31,11 @@ if __name__ == "__main__":
     df = run_experiments(seeds=seeds, n=args.n, model=model, tuned_cfg=tuned)
     print(df.groupby("scheduler")[["avg_waiting", "avg_response", "throughput",
                                    "fairness_jain", "context_switches"]].mean().round(3))
+    ranking = rank_schedulers(df)
+    print("\nComposite ranking (avg_waiting + 0.5*avg_response - 100*fairness_jain, lower is better):")
+    print(ranking[["avg_waiting", "avg_response", "fairness_jain",
+                   "composite_score", "oracle"]].round(3))
+    best = ranking[~ranking["oracle"]].index[0]
+    print(f"Best deployable scheduler: {best} (SJF is an oracle bound, not deployable)")
     ablation(model=model)
     print(f"Wrote results/experiments.csv ({len(df)} rows) and results/ablation.csv")

@@ -232,6 +232,7 @@ class Simulator:
         if p.first_start is None:
             p.first_start = self.time
         p.remaining -= 1.0
+        p.cpu_received += 1.0
         p.quantum_used += 1.0
         self.busy_ticks += 1.0
         self._last_pid = p.pid
@@ -279,6 +280,19 @@ class Simulator:
         if self.algorithm == "mlfq":
             return sum(len(q) for q in self.queues) + (1 if self.running else 0)
         return len(self.ready) + (1 if self.running else 0)
+
+    def ready_processes(self) -> list:
+        if self.algorithm == "mlfq":
+            return [p for q in self.queues for p in q]
+        return list(self.ready)
+
+    def max_ready_waiting(self) -> float:
+        """Longest cumulative ready-queue wait among waiting processes."""
+        return max((p.waiting for p in self.ready_processes()), default=0.0)
+
+    def current_jain(self) -> float:
+        from .metrics import current_jain
+        return current_jain(self.procs, self.time)
 
     def reset_window_stats(self) -> None:
         self.wait_ticks_window = 0.0

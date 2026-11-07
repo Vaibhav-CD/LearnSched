@@ -34,11 +34,21 @@ ACTION_CONFIGS: list[MLFQConfig] = [
     MLFQConfig((2, 4, 8, float("inf")), 0),    # medium quanta, no boost
 ]
 
-# Reward v3: built directly from accrued waiting time, so the episodic
-# return tracks the reported latency metrics (v1/v2 ranked long quanta
-# best even on latency -- verified by scoring every fixed action).
+# Reward v4: v3 (built from accrued waiting time, so the episodic return
+# tracks the reported latency metrics) plus a fairness penalty. Fairness is
+# Jain's index over cpu_received/elapsed for arrived processes, computed
+# from observable state only at the end of each window (see
+# metrics.current_jain, same cpu/turnaround definition as the episodic
+# fairness_jain). The penalty is bounded per window: -W_FAIR * (1 - jain),
+# so a perfectly fair window costs 0 and prolonging an episode cannot farm
+# fairness reward (there is no positive fairness bonus to collect).
 #   sum over windows of wait_ticks/n == average waiting time.
-W_WAIT, W_RESP, W_CS, W_COMPLETE = 0.10, 0.25, 0.01, 0.10
+# W_FAIR is calibrated to the composite score: episodic fairness pressure
+# is W_FAIR * n_windows (~45) against W_WAIT per waiting tick, i.e. a ratio
+# of ~90, matching FAIRNESS_SCORE_WEIGHT / 1.0 in metrics.composite_score.
+# At 0.50 the ratio was ~225 and the trained policy bought +0.10 Jain for
+# +51 ticks of waiting (worse composite) -- see docs/REPORT.md.
+W_WAIT, W_RESP, W_CS, W_COMPLETE, W_FAIR = 0.10, 0.25, 0.01, 0.10, 0.20
 
 
 class MLFQTuningEnv(gym.Env):
@@ -122,17 +132,20 @@ class MLFQTuningEnv(gym.Env):
         s = self.sim
         wait_cost = s.wait_ticks_window / max(self.decision_interval, 1)  # avg ready length
         n = max(len(s.procs), 1)
+        jain_window = s.current_jain()
         reward = (-W_WAIT * (s.wait_ticks_window / n)
                   - W_RESP * (s.response_wait_window / n)
                   - W_CS * s.cs_window
-                  + W_COMPLETE * s.completed_window)
+                  + W_COMPLETE * s.completed_window
+                  - W_FAIR * (1.0 - jain_window))
         terminated = s.done
         truncated = (not terminated) and s.time >= self.max_ticks
         # NOTE: no wall-clock values in info (keeps step() deterministic
         # under Gymnasium's env checker); overhead is on the attribute.
         info = {"time": s.time, "completed": s.done_count,
                 "config": ACTION_CONFIGS[self.current_action].label(),
-                "wait_cost": float(wait_cost), "cs": s.cs_window}
+                "wait_cost": float(wait_cost), "cs": s.cs_window,
+                "jain_window": float(jain_window)}
         if terminated or truncated:
             from .simulator import SimResult
             result = SimResult(processes=s.procs, timeline=s.timeline,

@@ -15,7 +15,11 @@ FIXED_MLFQ = MLFQConfig((4, 8, 16, float("inf")), 50)
 # "Tuned" MLFQ: selected on validation traces (see experiments.tune_fixed_mlfq),
 # never on test traces. Default below is replaced by the tuned winner when
 # experiments run; the value here is a documented starting point.
-TUNED_MLFQ = MLFQConfig((2, 4, 8, float("inf")), 50)
+TUNED_MLFQ = MLFQConfig((1, 2, 4, float("inf")), 0)  # fairness-aware winner, seeds 101-102
+
+# Fairness thresholds for the rule-based controller (observable state only).
+STARVATION_WAIT = 100.0  # ticks of cumulative ready wait = starvation risk
+FAIR_JAIN_FLOOR = 0.50   # current Jain below this = service too unequal
 
 
 def run_scheduler(processes, algorithm, **kw):
@@ -29,7 +33,13 @@ def run_rule_based(processes, decision_interval=20, cs_overhead=0.0):
     sim = Simulator(processes, algorithm="mlfq", mlfq=FIXED_MLFQ, cs_overhead=cs_overhead)
     while not sim.done:
         ready = sim.ready_count()
-        if ready >= 10:
+        # Fairness first: a long-waiting process or a collapsed Jain index
+        # means starvation risk -- boost everyone to Q0 with short quanta
+        # regardless of queue length (both signals are observable now).
+        starving = sim.max_ready_waiting() >= STARVATION_WAIT or sim.current_jain() < FAIR_JAIN_FLOOR
+        if starving:
+            cfg = ACTION_CONFIGS[6]   # (1,2,4,inf), boost 25: rescue + boost
+        elif ready >= 10:
             cfg = ACTION_CONFIGS[6]   # short quanta, frequent boost
         elif ready >= 5:
             cfg = ACTION_CONFIGS[0]   # medium quanta, frequent boost

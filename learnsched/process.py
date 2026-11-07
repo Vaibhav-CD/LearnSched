@@ -27,6 +27,7 @@ class Process:
     io_done_at: float | None = None
     queue_level: int = 0
     quantum_used: float = 0.0
+    cpu_received: float = 0.0  # CPU ticks actually served (for fairness so far)
 
     def __post_init__(self) -> None:
         if not self.cpu_bursts or any(b <= 0 for b in self.cpu_bursts):
