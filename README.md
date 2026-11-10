@@ -21,8 +21,9 @@ python -m venv --system-site-packages .venv   # reuses a system torch/SB3 if pre
 ## Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/ -q          # 29 unit tests
+.\.venv\Scripts\python.exe -m pytest tests/ -q          # 32 unit tests
 .\.venv\Scripts\python.exe scripts/check_env.py          # Gymnasium env validation
+.\.venv\Scripts\python.exe scripts/evaluate.py --scenario bursty --seed 0   # Quick CLI benchmark
 .\.venv\Scripts\python.exe scripts/train_ppo.py --smoke  # 4k steps, ~10 s
 .\.venv\Scripts\python.exe scripts/train_ppo.py --timesteps 50000
 .\.venv\Scripts\python.exe scripts/run_experiments.py    # tuning + 144 comparison runs
@@ -37,8 +38,9 @@ python -m venv --system-site-packages .venv   # reuses a system torch/SB3 if pre
 - [learnsched/env.py](/learnsched/env.py) — MDP environment (state/action/reward)
 - [learnsched/train.py](/learnsched/train.py) — SB3 PPO training, checkpoints, reward log
 - [learnsched/experiments.py](/learnsched/experiments.py) — identical-trace comparison, validation-only tuning, ablation
-- [dashboard/app.py](/dashboard/app.py) — Streamlit research dashboard
-- [docs/DESIGN.md](/docs/DESIGN.md), [docs/MDP.md](/docs/MDP.md), [docs/PPO.md](/docs/PPO.md), [docs/REPORT.md](/docs/REPORT.md)
+- [scripts/evaluate.py](/scripts/evaluate.py) — quick CLI scheduler benchmark and leaderboard
+- [dashboard/app.py](/dashboard/app.py) — Streamlit research dashboard with side-by-side comparison & parameter tracking
+- [docs/DESIGN.md](/docs/DESIGN.md), [docs/MDP.md](/docs/MDP.md), [docs/PPO.md](/docs/PPO.md), [docs/REPORT.md](/docs/REPORT.md), [docs/PRESENTATION.md](/docs/PRESENTATION.md)
 
 ## Measured findings (fairness-aware model, seeds 0–2, 6 scenarios)
 
